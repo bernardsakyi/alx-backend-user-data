@@ -1,99 +1,119 @@
 #!/usr/bin/env python3
-"""A module for filtering logs.
 """
-import os
+Filter personal information using a Regex, Environmental variables, etc.
+"""
+
 import re
+from typing import List
 import logging
 import mysql.connector
-from typing import List
-
-
-patterns = {
-    'extract': lambda x, y: r'(?P<field>{})=[^{}]*'.format('|'.join(x), y),
-    'replace': lambda x: r'\g<field>={}'.format(x),
-}
-PII_FIELDS = ("name", "email", "phone", "ssn", "password")
-
-
-def filter_datum(
-        fields: List[str], redaction: str, message: str, separator: str,
-        ) -> str:
-    """Filters a log line.
-    """
-    extract, replace = (patterns["extract"], patterns["replace"])
-    return re.sub(extract(fields, separator), replace(redaction), message)
-
-
-def get_logger() -> logging.Logger:
-    """Creates a new logger for user data.
-    """
-    logger = logging.getLogger("user_data")
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(RedactingFormatter(PII_FIELDS))
-    logger.setLevel(logging.INFO)
-    logger.propagate = False
-    logger.addHandler(stream_handler)
-    return logger
-
-
-def get_db() -> mysql.connector.connection.MySQLConnection:
-    """Creates a connector to a database.
-    """
-    db_host = os.getenv("PERSONAL_DATA_DB_HOST", "localhost")
-    db_name = os.getenv("PERSONAL_DATA_DB_NAME", "")
-    db_user = os.getenv("PERSONAL_DATA_DB_USERNAME", "root")
-    db_pwd = os.getenv("PERSONAL_DATA_DB_PASSWORD", "")
-    connection = mysql.connector.connect(
-        host=db_host,
-        port=3306,
-        user=db_user,
-        password=db_pwd,
-        database=db_name,
-    )
-    return connection
-
-
-def main():
-    """Logs the information about user records in a table.
-    """
-    fields = "name,email,phone,ssn,password,ip,last_login,user_agent"
-    columns = fields.split(',')
-    query = "SELECT {} FROM users;".format(fields)
-    info_logger = get_logger()
-    connection = get_db()
-    with connection.cursor() as cursor:
-        cursor.execute(query)
-        rows = cursor.fetchall()
-        for row in rows:
-            record = map(
-                lambda x: '{}={}'.format(x[0], x[1]),
-                zip(columns, row),
-            )
-            msg = '{};'.format('; '.join(list(record)))
-            args = ("user_data", logging.INFO, None, None, msg, None, None)
-            log_record = logging.LogRecord(*args)
-            info_logger.handle(log_record)
+import os
 
 
 class RedactingFormatter(logging.Formatter):
-    """ Redacting Formatter class
+    """
+    Redacting Formatter class
     """
 
     REDACTION = "***"
     FORMAT = "[HOLBERTON] %(name)s %(levelname)s %(asctime)-15s: %(message)s"
-    FORMAT_FIELDS = ('name', 'levelname', 'asctime', 'message')
     SEPARATOR = ";"
 
     def __init__(self, fields: List[str]):
-        super(RedactingFormatter, self).__init__(self.FORMAT)
         self.fields = fields
+        super(RedactingFormatter, self).__init__(self.FORMAT)
 
     def format(self, record: logging.LogRecord) -> str:
-        """formats a LogRecord.
         """
-        msg = super(RedactingFormatter, self).format(record)
-        txt = filter_datum(self.fields, self.REDACTION, msg, self.SEPARATOR)
-        return txt
+        Filter values in incoming log records using filter_datum.
+        Values for fields in fields should be filtered.
+        """
+        result = logging.Formatter(self.FORMAT).format(record)
+        return filter_datum(
+            self.fields,
+            self.REDACTION,
+            result,
+            self.SEPARATOR)
+
+
+PII_FIELDS = ('name', 'email', 'password', 'ssn', 'phone')
+
+
+def get_db() -> mysql.connector.connection.MySQLConnection:
+    """
+    Connect to mysql server with environmental vars
+    """
+    db_connect = mysql.connector.connect(
+        user=os.getenv('PERSONAL_DATA_DB_USERNAME', 'root'),
+        password=os.getenv('PERSONAL_DATA_DB_PASSWORD', ''),
+        host=os.getenv('PERSONAL_DATA_DB_HOST', 'localhost'),
+        database=os.getenv('PERSONAL_DATA_DB_NAME')
+    )
+    return db_connect
+
+
+def filter_datum(fields: List[str],
+                 redaction: str,
+                 message: str,
+                 separator: str) -> str:
+    """
+    Returns the log message obfuscated with Regex
+    """
+    for item in fields:
+        message = re.sub(item + '=.*?' + separator, item + '=' +
+                         redaction + separator, message)
+    return message
+
+
+def get_logger() -> logging.Logger:
+    """
+    Returns a Logger object with a
+    StreamHandler with RedactingFormatter
+    as formatter
+    """
+    logger = logging.getLogger('user_data')
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    target_handler = logging.StreamHandler()
+    target_handler.setLevel(logging.INFO)
+
+    formatter = RedactingFormatter(list(PII_FIELDS))
+    target_handler.setFormatter(formatter)
+
+    logger.addHandler(target_handler)
+    return logger
+
+
+def main() -> None:
+    """
+    Obtain a database connection using get_db
+    and retrieve all rows in the users table and display each row w/ format:
+
+    [HOLBERTON] user_data INFO 2019-11-19 18:37:59,596:
+    name=***; email=***; phone=***; ssn=***; password=***;
+    ip=60ed:c396:2ff:244:bbd0:9208:26f2:93ea; last_login=2019-11-14 06:14:24
+    user_agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)
+    AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.157 Safari/537.36;
+    """
+    db = get_db()
+    cur = db.cursor()
+
+    query = ('SELECT * FROM users;')
+    cur.execute(query)
+    fetch_data = cur.fetchall()
+
+    logger = get_logger()
+
+    for row in fetch_data:
+        fields = 'name={}; email={}; phone={}; ssn={}; password={}; ip={}; '\
+            'last_login={}; user_agent={};'
+        fields = fields.format(row[0], row[1], row[2], row[3],
+                               row[4], row[5], row[6], row[7])
+        logger.info(fields)
+
+    cur.close()
+    db.close()
 
 
 if __name__ == "__main__":
