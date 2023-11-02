@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-
-""" Database class to save and update databse
+"""DB Module
 """
 
 from sqlalchemy import create_engine
@@ -12,11 +11,11 @@ from user import Base, User
 
 
 class DB:
-    """ Database class
+    """DB class
     """
 
     def __init__(self):
-        """ Initializes class attributes
+        """Initializes a new DB instance
         """
         self._engine = create_engine("sqlite:///a.db", echo=False)
         Base.metadata.drop_all(self._engine)
@@ -25,7 +24,8 @@ class DB:
 
     @property
     def _session(self):
-        """ Private method that returns a session
+        """Private memoized session method (object)
+        Never used outside DB class
         """
         if self.__session is None:
             DBSession = sessionmaker(bind=self._engine)
@@ -33,7 +33,8 @@ class DB:
         return self.__session
 
     def add_user(self, email: str, hashed_password: str) -> User:
-        """ Save new the user to the database
+        """Add new user to database
+        Returns a User object
         """
         user = User(email=email, hashed_password=hashed_password)
         self._session.add(user)
@@ -41,16 +42,11 @@ class DB:
         return user
 
     def find_user_by(self, **kwargs) -> User:
-        """ Returns the first row found in users table
-            as filtered by the method's input argument
+        """Returns first rrow found in users table
+        as filtered by methods input arguments
         """
-        user_keys = [
-            'id',
-            'email',
-            'hashed_password',
-            'session_id',
-            'reset_token']
-
+        user_keys = ['id', 'email', 'hashed_password', 'session_id',
+                     'reset_token']
         for key in kwargs.keys():
             if key not in user_keys:
                 raise InvalidRequestError
@@ -60,18 +56,15 @@ class DB:
         return result
 
     def update_user(self, user_id: int, **kwargs) -> None:
-        """ Update user attribute and
-            commits changes to the database
+        """Use find_user_by to locate the user to update
+        Update user's attribute as passed in methods argument
+        Commit changes to database
+        Raises ValueError if argument does not correspond to user
+        attribute passed
         """
         user_to_update = self.find_user_by(id=user_id)
-
-        user_keys = [
-            'id',
-            'email',
-            'hashed_password',
-            'session_id',
-            'reset_token']
-
+        user_keys = ['id', 'email', 'hashed_password', 'session_id',
+                     'reset_token']
         for key, value in kwargs.items():
             if key in user_keys:
                 setattr(user_to_update, key, value)

@@ -1,55 +1,53 @@
 #!/usr/bin/env python3
-
-import requests
-
-""" End-to-end integration test
+"""
+End-to-end integration test
 """
 
 
 def register_user(email: str, password: str) -> None:
-    """ Tests register_user
+    """Test for register user
     """
     assert True
 
 
 def log_in_wrong_password(email: str, password: str) -> None:
-    """ Test logging in with wrong password
+    """Test for login with wrong password
     """
     assert True
 
 
 def log_in(email: str, password: str) -> str:
-    """ Test log-in
+    """Test for login
     """
     assert True
 
 
 def profile_unlogged() -> None:
-    """ Test profile unlogged
+    """Test for profile unlogged
     """
     assert True
 
 
 def profile_logged(session_id: str) -> None:
-    """ Test profile logged
+    """Test for profile logged
     """
     assert True
 
 
 def log_out(session_id: str) -> None:
-    """ Test logout
+    """Test for logout
     """
     assert True
 
 
 def reset_password_token(email: str) -> str:
-    """ Test reset password
+    """Test for reset password
     """
     assert True
 
 
 def update_password(email: str, reset_token: str, new_password: str) -> None:
-    """ Test
+    """Test for update password
     """
     assert True
 
@@ -60,7 +58,6 @@ NEW_PASSWD = "t4rt1fl3tt3"
 
 
 if __name__ == "__main__":
-
     register_user(EMAIL, PASSWD)
     log_in_wrong_password(EMAIL, NEW_PASSWD)
     profile_unlogged()
